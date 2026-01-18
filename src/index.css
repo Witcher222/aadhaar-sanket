@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Aadhaar Sanket Design System - Light Mode Only */
+    --background: 40 33% 98%;
+    --foreground: 220 13% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 20%;
+
+    /* Deep Saffron Primary */
+    --primary: 30 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Cream/Off-White Secondary */
+    --secondary: 40 33% 96%;
+    --secondary-foreground: 220 13% 20%;
+
+    --muted: 40 20% 94%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 40 30% 94%;
+    --accent-foreground: 220 13% 20%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Status Colors */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 220 13% 20%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 40 20% 90%;
+    --input: 40 20% 90%;
+    --ring: 30 100% 60%;
+
+    --radius: 1rem;
+
+    /* Sidebar with glassmorphism */
+    --sidebar-background: 0 0% 100% / 0.8;
+    --sidebar-foreground: 220 13% 20%;
+    --sidebar-primary: 30 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 30% 96%;
+    --sidebar-accent-foreground: 220 13% 20%;
+    --sidebar-border: 40 20% 92%;
+    --sidebar-ring: 30 100% 60%;
+
+    /* Custom Design Tokens */
+    --gradient-saffron: linear-gradient(135deg, hsl(30 100% 60%) 0%, hsl(25 100% 55%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(40 33% 98%) 0%, hsl(40 20% 96%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(40 30% 99%) 100%);
+    --shadow-soft: 0 4px 20px -4px hsl(220 13% 20% / 0.08);
+    --shadow-medium: 0 8px 30px -6px hsl(220 13% 20% / 0.12);
+    --shadow-elevated: 0 20px 50px -12px hsl(220 13% 20% / 0.15);
+    --shadow-glow: 0 0 40px -10px hsl(30 100% 60% / 0.3);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-sidebar {
+    @apply bg-white/80 backdrop-blur-xl border-r border-border/50;
+  }
+
+  .card-elevated {
+    @apply bg-card rounded-2xl border border-border/50;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-elevated:hover {
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-2px);
+  }
+
+  .stat-card {
+    @apply bg-card rounded-2xl p-6 border border-border/50;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-4px);
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground font-medium rounded-xl px-6 py-3;
+    background: var(--gradient-saffron);
+    box-shadow: var(--shadow-glow);
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 50px -8px hsl(30 100% 60% / 0.4);
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground font-medium transition-all duration-200;
+  }
+
+  .nav-item:hover {
+    @apply bg-accent text-accent-foreground;
+  }
+
+  .nav-item.active {
+    @apply bg-primary/10 text-primary;
+  }
+
+  .ticker-container {
+    @apply overflow-hidden relative;
+  }
+
+  .ticker-content {
+    animation: ticker 30s linear infinite;
+  }
+
+  @keyframes ticker {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+  }
+
+  .gauge-ring {
+    @apply transition-all duration-1000 ease-out;
+  }
+
+  .alert-pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, transparent 0%, hsl(0 0% 100% / 0.4) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
