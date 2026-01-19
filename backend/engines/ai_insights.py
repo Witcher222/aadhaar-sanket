@@ -53,16 +53,13 @@ def load_analytics_context() -> Dict:
 def generate_policy_recommendations(district: Optional[str] = None) -> Dict:
     """
     Generate AI-powered policy recommendations based on current data.
-    
-    Args:
-        district: Optional district name for specific recommendations
-        
-    Returns:
-        Dict with recommendations, priorities, and timeline
     """
-    if not configure_gemini():
+    from ai.insight_engine import get_insight_engine
+    engine = get_insight_engine()
+    
+    if not engine.is_available():
         return {
-            "error": "Gemini API key not configured. Please set GEMINI_API_KEY in .env",
+            "error": "Gemini AI key not configured or models unavailable.",
             "recommendations": []
         }
     
@@ -102,7 +99,7 @@ Provide recommendations in this JSON format:
 Provide 3-5 specific, implementable recommendations."""
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = engine.get_active_model()
         response = model.generate_content(prompt)
         
         # Parse JSON from response
@@ -131,6 +128,19 @@ Provide 3-5 specific, implementable recommendations."""
         }
         
     except Exception as e:
+        print(f"Policy Generation Error: {e}. Attempting rotation...")
+        if engine._switch_to_next_model():
+             try:
+                 model = engine.get_active_model()
+                 response = model.generate_content(prompt)
+                 response_text = response.text
+                 json_start = response_text.find('{')
+                 json_end = response_text.rfind('}') + 1
+                 if json_start >= 0 and json_end > json_start:
+                     json_str = response_text[json_start:json_end]
+                     result = json.loads(json_str)
+                     return {"status": "success", "district": district or "National", **result}
+             except: pass
         return {
             "error": str(e),
             "recommendations": []
@@ -140,16 +150,13 @@ Provide 3-5 specific, implementable recommendations."""
 def answer_natural_query(question: str) -> Dict:
     """
     Answer a natural language question using analytics data.
-    
-    Args:
-        question: Natural language question
-        
-    Returns:
-        Dict with answer and supporting data
     """
-    if not configure_gemini():
+    from ai.insight_engine import get_insight_engine
+    engine = get_insight_engine()
+    
+    if not engine.is_available():
         return {
-            "error": "Gemini API key not configured. Please set GEMINI_API_KEY in .env",
+            "error": "Gemini AI key not configured or models unavailable.",
             "answer": None
         }
     
@@ -177,7 +184,7 @@ USER QUESTION: {question}
 Provide a clear, data-backed answer. If the data doesn't contain the answer, say so honestly."""
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = engine.get_active_model()
         response = model.generate_content(prompt)
         
         return {
@@ -191,10 +198,26 @@ Provide a clear, data-backed answer. If the data doesn't contain the answer, say
         }
         
     except Exception as e:
+        print(f"Query AI Error: {e}. Rotating...")
+        if engine._switch_to_next_model():
+             try:
+                 model = engine.get_active_model()
+                 response = model.generate_content(prompt)
+                 return {
+                    "status": "success",
+                    "question": question,
+                    "answer": response.text,
+                    "data_context": {
+                        "districts_analyzed": context.get('mvi_summary', {}).get('total_districts', 0),
+                        "high_risk_count": context.get('mvi_summary', {}).get('high_risk_count', 0)
+                    }
+                }
+             except: pass
         return {
             "error": str(e),
             "answer": None
         }
+
 
 
 def get_district_insights(district: str) -> Dict:

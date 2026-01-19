@@ -43,6 +43,11 @@ class InsightEngine:
         Initialize the Gemini model with dynamic discovery.
         Fetches available models associated with the key to ensure universal compatibility.
         """
+        if not self.api_key:
+            print("Warning: No GEMINI_API_KEY provided.")
+            self._initialized = False
+            return
+
         try:
             import google.generativeai as genai
             self.genai = genai
@@ -57,15 +62,17 @@ class InsightEngine:
                     if 'generateContent' in m.supported_generation_methods
                 ]
                 print(f"Discovered {len(self.available_models)} available models for this key")
+                if not self.available_models:
+                    # Fallback to some common names if list failed but didn't error
+                    self.available_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
             except Exception as e:
-                print(f"Could not list models: {e}. Falling back to config defaults.")
-                self.available_models = [AI_CONFIG["model_name"]] + AI_CONFIG.get("fallback_models", [])
+                print(f"Could not list models: {e}. Falling back to defaults.")
+                self.available_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
 
-            # 2. Prioritize "Flash" and "Pro" models, but keep others as backup
-            # This sorting ensures we try the fastest/best models first
+            # 2. Prioritize "Flash" and "Pro" models
             def model_priority(name):
                 name = name.lower()
-                if 'flash' in name and 'lite' in name: return 0  # Fastest/Cheapest
+                if 'flash' in name and 'lite' in name: return 0
                 if 'flash' in name: return 1
                 if 'pro' in name: return 2
                 return 3
@@ -73,35 +80,61 @@ class InsightEngine:
             self.available_models.sort(key=model_priority)
             
             # 3. Try to initialize with the best available model
-            success = False
-            for i, model_name in enumerate(self.available_models):
-                try:
-                    self.model = genai.GenerativeModel(model_name)
-                    # Verify it works with a tiny test prompt (optional but safer)
-                    # self.model.generate_content("test") 
-                    
-                    self.current_model_name = model_name
-                    self.model_index = i
-                    print(f"Gemini initialized successfully with: {model_name}")
-                    success = True
-                    break
-                except Exception as e:
-                    print(f"Skipping {model_name}: {e}")
-                    continue
+            self._try_next_model()
             
-            if success:
+            if self.model:
                 self._load_context()
                 self._initialized = True
             else:
-                print("Warning: No Gemini models could be initialized from the available list")
+                print("Warning: No Gemini models could be initialized")
                 self._initialized = False
                 
-        except ImportError:
-            print("Warning: google-generativeai not installed")
-            self._initialized = False
         except Exception as e:
             print(f"Warning: Could not initialize Gemini: {e}")
             self._initialized = False
+
+    def _try_next_model(self) -> bool:
+        """Helper to try to load the next available model."""
+        while self.model_index < len(self.available_models):
+            model_name = self.available_models[self.model_index]
+            try:
+                print(f"Attempting to initialize Gemini with: {model_name}")
+                self.model = self.genai.GenerativeModel(model_name)
+                # Quick validation to see if the model/key combination is actually valid
+                # self.model.generate_content("test") 
+                self.current_model_name = model_name
+                return True
+            except Exception as e:
+                print(f"Skipping {model_name}: {e}")
+                self.model_index += 1
+        return False
+
+    def get_active_model(self):
+        """Returns the currently active generative model. Re-initializes if key changed."""
+        from dotenv import load_dotenv
+        from config import ROOT_DIR
+        load_dotenv(ROOT_DIR / ".env", override=True) # Force reload from file
+        
+        # Get fresh from os.environ
+        env_key = os.getenv("GEMINI_API_KEY")
+        
+        if env_key and env_key != self.api_key:
+            print(f"Detected GEMINI_API_KEY change. Refreshing engine...")
+            self.refresh_key(env_key)
+
+            
+        if not self.is_available():
+            # Try to re-initialize once if we failed before
+            self._initialize()
+        return self.model
+
+
+    def refresh_key(self, new_key: str):
+        """Update API key and re-initialize."""
+        self.api_key = new_key
+        self.model_index = 0
+        self._initialize()
+
     
     def _switch_to_next_model(self):
         """Switch to the next available model when quota is exceeded."""

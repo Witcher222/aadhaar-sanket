@@ -151,7 +151,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # --- Routers ---
-from api.routes import overview, upload, migration, trends, spatial, alerts, map, policy, trust, ai, report, export, advanced
+from api.routes import overview, upload, migration, trends, spatial, alerts, map, policy, trust, ai, report, export, advanced, ai_test
 
 app.include_router(overview.router, prefix="/api/overview", tags=["Overview"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
@@ -166,6 +166,8 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 app.include_router(report.router, prefix="/api/report", tags=["Report"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(advanced.router, prefix="/api/advanced", tags=["Advanced Analytics"])
+app.include_router(ai_test.router, prefix="/api") # Prefixes handled in router
+
 
 
 

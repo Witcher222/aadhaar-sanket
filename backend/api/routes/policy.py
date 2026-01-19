@@ -476,6 +476,9 @@ async def get_effectiveness_scores():
     """
     Get AI-powered effectiveness scores for all policies.
     """
+    from ai.insight_engine import get_insight_engine
+    engine = get_insight_engine()
+    
     try:
         policy_df = load_processed_dataset('policy_recommendations')
         
@@ -483,7 +486,7 @@ async def get_effectiveness_scores():
             return {
                 "status": "success",
                 "scores": [],
-                "ai_available": AI_AVAILABLE
+                "ai_available": engine.is_available()
             }
         
         policies = policy_df.to_dicts()
@@ -498,7 +501,7 @@ async def get_effectiveness_scores():
             }
             
             # Generate AI rationale if available (Limit to top 5 to prevent timeouts)
-            if AI_AVAILABLE and len(scored_policies) < 5:
+            if engine.is_available() and len(scored_policies) < 5:
                 score_data['ai_rationale'] = await _generate_ai_rationale(policy)
             else:
                 score_data['ai_rationale'] = f"Policy targets {policy.get('zone_type', 'stable')} zone with {policy.get('action_type', 'maintenance')} intervention."
@@ -508,7 +511,7 @@ async def get_effectiveness_scores():
         return {
             "status": "success",
             "scores": scored_policies,
-            "ai_available": AI_AVAILABLE,
+            "ai_available": engine.is_available(),
             "total": len(scored_policies)
         }
         
@@ -635,11 +638,16 @@ def _calculate_effectiveness_score(policy: Dict) -> float:
 
 async def _generate_ai_rationale(policy: Dict) -> str:
     """Generate AI-powered rationale for policy effectiveness."""
-    if not AI_AVAILABLE:
+    from ai.insight_engine import get_insight_engine
+    engine = get_insight_engine()
+    
+    if not engine.is_available():
         return "AI analysis unavailable"
     
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = engine.get_active_model()
+        if not model:
+            return "No active AI model found"
         
         prompt = f"""
 Analyze this policy recommendation and provide a brief effectiveness rationale (2-3 sentences):
@@ -655,8 +663,20 @@ Priority: {policy.get('priority', 'LOW')}
 Provide a concise rationale for why this policy is effective or what challenges it may face.
 """
         
-        response = await model.generate_content_async(prompt)
-        return response.text.strip()
+        # Wrapped in attempt structure for rotation
+        try:
+            response = await model.generate_content_async(prompt)
+            return response.text.strip()
+        except Exception as api_err:
+            # Try to switch model if it failed (e.g. 429 or 404)
+            print(f"Policy AI Error: {api_err}. Attempting model rotation...")
+            if engine._switch_to_next_model():
+                model = engine.get_active_model()
+                response = await model.generate_content_async(prompt)
+                return response.text.strip()
+            raise api_err
         
     except Exception as e:
+        print(f"Final Policy AI Error: {e}")
         return f"Policy addresses {policy.get('zone_type', 'stable')} conditions with {policy.get('action_type', 'maintenance')} intervention."
+
