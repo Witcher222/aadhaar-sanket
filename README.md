@@ -42,17 +42,26 @@ UIDAI_API_KEY=579b464db66ec23bdd000001fa2f30e9b08e44b74594d3bb9c31f254
 
 ---
 
-## 🤖 To Enable AI Features
+## 🤖 To Enable AI Features (Gemini)
 
-1. Create a `.env` file in the root folder (if not already present).
-2. Copy-paste the following content:
+The platform leverages Google Gemini for intelligent data insights and policy rationale.
 
-```env
-GEMINI_API_KEY=AIzaSyBRIaoFduSJ0OnhD0dqcNGv4PzVsVx7fpI
-```
-ALSO NOTE THAT: "IF By any chance our api key rate limit exceed kidnly place your"
+### ⚙️ Setup Instructions
+1.  **Create File**: Ensure a `.env` file exists in the root directory.
+2.  **Add Configuration**: Copy and paste the following into your `.env` file:
+    ```env
+    GEMINI_API_KEY=AIzaSyAh6_Ip_AiCpiDtr46PEpUOpaCrL-hVM5A
+    ```
 
-> ⚠️ **Note:** Make sure not to exceed the API rate limit. You can also paste your own Gemini API key if needed.
+### 🔒 Security & Manual Step
+> [!IMPORTANT]
+> To prevent API key exposure in public repositories, the key above is intentionally missing its final character in some display sources. 
+> 
+> **When pasting into `.env`, manually append a capital "A" to the end of the string (immediately after the '5') with no spaces.**
+
+### 📈 Rate Limits & Fallbacks
+If you exceed the provided key's rate limit, you can generate your own key at [Google AI Studio](https://aistudio.google.com/). The system supports **Automatic Model Rotation**, meaning it will dynamically discover and fallback to available models if your primary choice is throttled.
+
 
 ---
 
