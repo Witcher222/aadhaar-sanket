@@ -48,8 +48,9 @@ UIDAI_API_KEY=579b464db66ec23bdd000001fa2f30e9b08e44b74594d3bb9c31f254
 2. Copy-paste the following content:
 
 ```env
-GEMINI_API_KEY=AIzaSyCQnkYCLBruXd0QwlUomRnlCBS4U81b0LY
+GEMINI_API_KEY=AIzaSyBRIaoFduSJ0OnhD0dqcNGv4PzVsVx7fpI
 ```
+ALSO NOTE THAT: "IF By any chance our api key rate limit exceed kidnly place your"
 
 > ⚠️ **Note:** Make sure not to exceed the API rate limit. You can also paste your own Gemini API key if needed.
 

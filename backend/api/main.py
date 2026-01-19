@@ -42,13 +42,18 @@ async def lifespan(app: FastAPI):
                 # 2. If new data detected or pipeline not complete but raw data exists
                 if status_check["new_data_detected"] or (not status_check["pipeline_complete"] and status_check["raw_data_found"]):
                     logger.info("New data or incomplete analytics detected! Auto-triggering pipeline...")
-                    run_full_pipeline(initialize_demo=False)
+                    
+                    # Run synchronously in a separate thread to avoid blocking the event loop
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, run_full_pipeline, False)
+                    
                     logger.info("Automated pipeline run completed.")
                 
                 elif not status_check["ready_for_pipeline"] and status_check.get("demodata_available"):
                     # Fallback to demo if nothing else exists and not ready
                     logger.info("No user data. Initializing demo pipeline...")
-                    run_full_pipeline(initialize_demo=True)
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, run_full_pipeline, True)
                 
             except Exception as e:
                 logger.error(f"Background Watcher Error: {e}")
@@ -193,4 +198,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

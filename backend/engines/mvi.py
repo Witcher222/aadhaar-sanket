@@ -90,18 +90,24 @@ def calculate_mvi(
     age_cols = [c for c in enrolment_df.columns if 'age' in c.lower()]
     
     if age_cols:
-        enrolment_agg = enrolment_df.group_by(['state', 'district', 'geo_key']).agg([
-            pl.sum_horizontal([pl.col(c) for c in age_cols]).sum().alias('population_base')
-        ])
+        # Aggregation: Total pop + individual age groups
+        agg_exprs = [pl.sum_horizontal([pl.col(c) for c in age_cols]).sum().alias('population_base')]
+        for col in age_cols:
+            agg_exprs.append(pl.col(col).sum().alias(f"demo_{col}")) # Prefix to avoid collision
+            
+        enrolment_agg = enrolment_df.group_by(['state', 'district', 'geo_key']).agg(agg_exprs)
     else:
         # Fallback: count rows
         enrolment_agg = enrolment_df.group_by(['state', 'district', 'geo_key']).agg([
             pl.count().alias('population_base')
         ])
     
+    # Select columns to keep from enrolment
+    keep_cols = ['geo_key', 'population_base'] + [f"demo_{c}" for c in age_cols]
+    
     # Join signal data with population
     mvi_df = signal_df.join(
-        enrolment_agg.select(['geo_key', 'population_base']),
+        enrolment_agg.select([c for c in keep_cols if c in enrolment_agg.columns]),
         on='geo_key',
         how='left'
     )
@@ -146,6 +152,10 @@ def calculate_mvi(
         'geo_key', 'state', 'district', 'mvi', 'zone_type', 'confidence',
         'population_base', 'organic_signal', 'raw_updates', 'noise_ratio'
     ]
+    
+    # Add preserved demographic cols
+    for col in age_cols:
+        final_cols.append(f"demo_{col}")
     
     # Ensure all columns exist
     for col in final_cols:

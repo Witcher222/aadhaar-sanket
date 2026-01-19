@@ -32,6 +32,7 @@ const navItems = [
   { icon: TrendingUp, label: 'Trend Analysis', path: '/trends' },
   { icon: Map, label: 'Indian Map', path: '/map-dashboard' },
   { icon: Map, label: 'Spatial Stress Map', path: '/stress-map' },
+  { icon: AlertTriangle, label: 'Critical Alerts', path: '/critical-alerts' },
   { icon: AlertTriangle, label: 'Forecasts & Alerts', path: '/forecasts' },
   { icon: FileCheck, label: 'Policy Decisions', path: '/policy' },
   { icon: Database, label: 'Data Trust & Quality', path: '/data-quality' },
@@ -75,13 +76,23 @@ export const AppSidebar = () => {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
+          const isCriticalAlerts = item.path === '/critical-alerts';
+
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className={`nav-item group ${isActive ? 'active' : ''}`}
+              className={`nav-item group relative ${isActive ? 'active' : ''} ${isCriticalAlerts
+                  ? 'border-2 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/50 shadow-sm shadow-red-500/10'
+                  : ''
+                }`}
             >
-              <item.icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+              <item.icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive
+                  ? 'text-primary'
+                  : isCriticalAlerts
+                    ? 'text-red-600 group-hover:text-red-700'
+                    : 'text-muted-foreground group-hover:text-foreground'
+                }`} />
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
@@ -89,16 +100,37 @@ export const AppSidebar = () => {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="truncate"
+                    className={`truncate ${isCriticalAlerts ? 'font-bold text-red-700' : ''}`}
                   >
                     {item.label}
                   </motion.span>
                 )}
               </AnimatePresence>
+
+              {/* Critical Badge - Only for Critical Alerts */}
+              {isCriticalAlerts && !collapsed && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="ml-auto flex items-center gap-1.5"
+                >
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-red-500 rounded-full">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    <span className="text-[9px] font-black text-white tracking-wider uppercase">Live</span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Animated pulse indicator when collapsed */}
+              {isCriticalAlerts && collapsed && (
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+              )}
+
               {isActive && (
                 <motion.div
                   layoutId="activeIndicator"
-                  className="absolute left-0 w-1 h-8 bg-primary rounded-r-full"
+                  className={`absolute left-0 w-1 h-8 rounded-r-full ${isCriticalAlerts ? 'bg-red-600' : 'bg-primary'
+                    }`}
                   transition={{ duration: 0.3 }}
                 />
               )}

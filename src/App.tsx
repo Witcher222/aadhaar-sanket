@@ -20,6 +20,7 @@ import UserGuide from "./pages/UserGuide";
 import AIAssistant from "./pages/AIAssistant";
 import AIChatbot from "./pages/AIChatbot";
 import Reports from "./pages/Reports";
+import CriticalAlerts from "./pages/CriticalAlerts";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { AIFloatingWidget } from "./components/AIFloatingWidget";
@@ -69,6 +70,7 @@ const App = () => (
                 <Route path="/map-dashboard" element={<MapDashboard />} />
                 <Route path="/stress-map" element={<SpatialStressMap />} />
                 <Route path="/forecasts" element={<Forecasts />} />
+                <Route path="/critical-alerts" element={<CriticalAlerts />} />
                 <Route path="/policy" element={<PolicyDecisions />} />
                 <Route path="/data-quality" element={<DataQuality />} />
                 <Route path="/justification" element={<DataJustificationPage />} />

@@ -267,16 +267,23 @@ class HardenedDataIngestionManager:
                 if files:
                     processed_path = self.processed_dir / f"{dtype}_clean.parquet"
                     
-                    # If this is the first time or we have NEW files, we need to merge with existing or overwrite
-                    # For safety and "no duplication", we will overwrite with ALL UNIQUE raw files found
-                    # but only if we have NEW files to add.
+                    # We have new data. To ensure the dataset is complete and consistent,
+                    # we must rebuild the parquet from ALL currently valid raw files for this type.
+                    # Since we cap raw files at 5 (in api_fetcher), this is efficient and safe.
                     
-                    all_of_type = []
-                    # Get all unique files of this type (new + old that we know about)
-                    # Simple approach: Re-read all unique files found in scan
-                    # This ensures "duplicate is strictly prohibited"
+                    # Get ALL valid files of this type from the discovery step
+                    all_current_files = []
+                    seen_hashes_for_rebuild = set()
                     
-                    convert_result = convert_to_parquet(files, processed_path, dtype)
+                    # Re-scan datasets dict to get everything (old + new)
+                    for f_path in datasets.get(dtype, []):
+                        f_hash = self.tracker._get_hash(f_path)
+                        if f_hash not in seen_hashes_for_rebuild:
+                            seen_hashes_for_rebuild.add(f_hash)
+                            all_current_files.append(f_path)
+                    
+                    # Convert ALL current files to Parquet (overwriting the old one)
+                    convert_result = convert_to_parquet(all_current_files, processed_path, dtype)
                     results["processed"][dtype] = convert_result
                     
                     # Mark new files as processed

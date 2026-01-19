@@ -38,3 +38,6 @@ __pycache__/
 # Testing
 .vitest-result/
 coverage/
+
+# Security
+.env

@@ -137,7 +137,7 @@ async def ask_ai(request: QueryRequest):
         if not engine.is_available():
             return {
                 "status": "warning", 
-                "answer": "AI Engine is active but requires configured API Key.",
+                "answer": "AI Engine is active but requires configured API Key. Please check your GEMINI_API_KEY in .env file.",
                 "source": "fallback"
             }
             
@@ -149,7 +149,18 @@ async def ask_ai(request: QueryRequest):
             "source": "ai"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the error for debugging
+        import traceback
+        print(f"AI Chat Error: {type(e).__name__}: {str(e)}")
+        traceback.print_exc()
+        
+        # Return graceful fallback instead of 500 error
+        return {
+            "status": "warning",
+            "answer": f"AI service encountered an error: {str(e)}. Using fallback mode.",
+            "source": "error",
+            "error_type": type(e).__name__
+        }
 
 @router.post("/chat")
 async def chat(request: QueryRequest):

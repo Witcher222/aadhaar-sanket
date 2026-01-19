@@ -36,30 +36,56 @@ const AIAssistant = () => {
     scrollToBottom();
   }, [messages]);
 
-  const simulateResponse = (query: string) => {
+  const simulateResponse = async (query: string) => {
     setIsTyping(true);
 
-    // Simulate AI thinking time
-    setTimeout(() => {
+    try {
+      // Call the backend AI API
+      const response = await fetch('http://localhost:8000/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, context: {} }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Format the AI response
+      let responseText = data.answer || data.response || 'No response received.';
+
+      // Check if API returned a warning/fallback
+      if (data.status === 'warning' || data.source === 'fallback') {
+        responseText = `⚠️ ${responseText}\n\nNote: AI service may need configuration. Check your GEMINI_API_KEY in .env file.`;
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: 'assistant',
+          content: responseText,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error('AI API call failed:', error);
+      // Fallback to static responses if API fails
       const responses: Record<string, { text: string; hasChart: boolean }> = {
         mumbai: {
-          text: "Based on my analysis of Mumbai's migration data for 2024:\n\n📊 **Key Findings:**\n- Total inflow: 892,000 migrants\n- Primary source states: UP (34%), Bihar (28%), MP (15%)\n- Peak migration months: Oct-Dec (festival season)\n- Sector distribution: Manufacturing (40%), Services (35%), Construction (25%)\n\nThe attached chart shows monthly migration trends.",
+          text: "Based on my analysis of Mumbai's migration data for 2024:\n\n📊 **Key Findings:**\n- Total inflow: 892,000 migrants\n- Primary source states: UP (34%), Bihar (28%), MP (15%)\n- Peak migration months: Oct-Dec (festival season)\n- Sector distribution: Manufacturing (40%), Services (35%), Construction (25%)\n\nThe attached chart shows monthly migration trends.\n\n---\n*⚠️ Note: Using offline mode. Backend API unavailable.*",
           hasChart: true,
         },
         delhi: {
-          text: "Delhi NCR population projection analysis:\n\n📈 **2026 Forecast:**\n- Projected population: 34.2 million\n- Annual growth rate: 3.8%\n- Key pressure zones: Gurgaon, Noida, Ghaziabad\n\n⚠️ **Infrastructure Gap Alert:**\n- Water supply: 15% deficit expected\n- Public transport: 22% capacity shortfall\n- Healthcare: 8 new hospitals recommended",
+          text: "Delhi NCR population projection analysis:\n\n📈 **2026 Forecast:**\n- Projected population: 34.2 million\n- Annual growth rate: 3.8%\n- Key pressure zones: Gurgaon, Noida, Ghaziabad\n\n⚠️ **Infrastructure Gap Alert:**\n- Water supply: 15% deficit expected\n- Public transport: 22% capacity shortfall\n- Healthcare: 8 new hospitals recommended\n\n---\n*⚠️ Note: Using offline mode. Backend API unavailable.*",
           hasChart: true,
         },
-        compare: {
-          text: "Bihar to Maharashtra vs Gujarat comparison:\n\n**To Maharashtra:**\n- Volume: 312,000/year\n- Avg stay: 8.2 years\n- Primary sector: Manufacturing\n\n**To Gujarat:**\n- Volume: 178,000/year  \n- Avg stay: 5.4 years\n- Primary sector: Construction\n\n🔍 Maharashtra attracts 75% more migrants but Gujarat shows higher retention for skilled workers.",
-          hasChart: false,
-        },
-        school: {
-          text: "School allocation analysis complete:\n\n🏫 **Priority Districts (Immediate):**\n1. Anantapur, AP - 5 schools needed\n2. Dhanbad, JH - 4 schools needed\n3. Varanasi, UP - 3 schools needed\n\n📋 **Criteria used:**\n- Child population growth >5%\n- Current student-teacher ratio >40:1\n- Distance to nearest school >3km\n\nTotal budget estimate: ₹210 Cr",
-          hasChart: false,
-        },
         default: {
-          text: "I've analyzed your query. Here's what I found:\n\n📊 The demographic patterns show interesting trends in population movement. Key factors include seasonal employment, urbanization, and infrastructure development.\n\nWould you like me to dive deeper into any specific aspect?",
+          text: "I've analyzed your query. Here's what I found:\n\n📊 The demographic patterns show interesting trends in population movement. Key factors include seasonal employment, urbanization, and infrastructure development.\n\nWould you like me to dive deeper into any specific aspect?\n\n---\n*⚠️ Note: Using offline mode. Backend API unavailable.*",
           hasChart: true,
         },
       };
@@ -69,14 +95,10 @@ const AIAssistant = () => {
       if (lowerQuery.includes('mumbai')) responseKey = 'mumbai';
       else if (lowerQuery.includes('delhi') || lowerQuery.includes('project'))
         responseKey = 'delhi';
-      else if (lowerQuery.includes('compare') || lowerQuery.includes('bihar'))
-        responseKey = 'compare';
-      else if (lowerQuery.includes('school') || lowerQuery.includes('district'))
-        responseKey = 'school';
 
-      const response = responses[responseKey];
+      const fallbackResponse = responses[responseKey];
 
-      const chartData = response.hasChart
+      const chartData = fallbackResponse.hasChart
         ? Array.from({ length: 12 }, (_, i) => ({
           month: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][i],
           value: Math.floor(50 + Math.random() * 50 + Math.sin(i * 0.5) * 20),
@@ -88,13 +110,14 @@ const AIAssistant = () => {
         {
           id: Date.now(),
           type: 'assistant',
-          content: response.text,
+          content: fallbackResponse.text,
           chartData,
           timestamp: new Date(),
         },
       ]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleSend = () => {

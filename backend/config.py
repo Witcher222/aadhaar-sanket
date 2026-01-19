@@ -144,21 +144,27 @@ POLICY_MAPPINGS = {
     },
     "emerging_inflow": {
         "priority": "HIGH",
-        "action_type": "planning",
-        "primary_action": "Initiate Capacity Expansion Planning",
-        "reasoning": "Accelerating growth requires proactive infrastructure investment"
+        "action_type": "social_program", 
+        "primary_action": "Expand Healthcare & Social Services",
+        "reasoning": "Growing population putting strain on local health systems"
+    },
+    "moderate_inflow": {
+        "priority": "MEDIUM",
+        "action_type": "education",
+        "primary_action": "Increase School Capacity",
+        "reasoning": "Moderate growth requires long-term educational planning"
     },
     "volatile": {
         "priority": "MEDIUM",
-        "action_type": "monitoring",
-        "primary_action": "Deploy Real-time Monitoring",
-        "reasoning": "Erratic patterns require closer surveillance"
+        "action_type": "governance",
+        "primary_action": "Employment & Labor Monitoring",
+        "reasoning": "Erratic migration patterns affect local labor markets"
     },
     "reversal": {
         "priority": "MEDIUM",
-        "action_type": "investigation",
-        "primary_action": "Commission Detailed Analysis",
-        "reasoning": "Trend reversal needs root cause investigation"
+        "action_type": "transport",
+        "primary_action": "Optimize Transport Networks",
+        "reasoning": "Shift in migration flow requires transport logistic review"
     },
     "stable": {
         "priority": "LOW",
@@ -206,7 +212,14 @@ API_CONFIG = {
 # AI CONFIGURATION
 # =============================================================================
 AI_CONFIG = {
-    "model_name": "gemini-pro",
+    # Prioritizing models with available capacity (lite models have 10 RPM)
+    "model_name": "gemini-2.5-flash-lite", 
+    "fallback_models": [
+        "gemini-3-flash-preview", 
+        "gemini-2.0-flash-lite", 
+        "gemini-1.5-flash",
+        "gemini-2.0-flash"
+    ],
     "max_tokens": 2048,
     "temperature": 0.7,
 }

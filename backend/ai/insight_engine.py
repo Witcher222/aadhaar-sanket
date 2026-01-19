@@ -22,25 +22,80 @@ from .prompts import (
 class InsightEngine:
     """
     AI-powered insight engine using Google Gemini.
+    Supports automatic model fallback when quota is exceeded.
     """
     
     def __init__(self):
         self.api_key = GEMINI_API_KEY
         self.model = None
+        self.genai = None
         self.context = None
         self._initialized = False
+        self.current_model_name = None
+        self.available_models = [AI_CONFIG["model_name"]] + AI_CONFIG.get("fallback_models", [])
+        self.model_index = 0
         
         if self.api_key:
             self._initialize()
     
     def _initialize(self):
-        """Initialize the Gemini model."""
+        """
+        Initialize the Gemini model with dynamic discovery.
+        Fetches available models associated with the key to ensure universal compatibility.
+        """
         try:
             import google.generativeai as genai
+            self.genai = genai
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(AI_CONFIG["model_name"])
-            self._load_context()
-            self._initialized = True
+            
+            # 1. Get all models available for this specific API key
+            try:
+                all_models = list(genai.list_models())
+                # Filter for text generation models
+                self.available_models = [
+                    m.name for m in all_models 
+                    if 'generateContent' in m.supported_generation_methods
+                ]
+                print(f"Discovered {len(self.available_models)} available models for this key")
+            except Exception as e:
+                print(f"Could not list models: {e}. Falling back to config defaults.")
+                self.available_models = [AI_CONFIG["model_name"]] + AI_CONFIG.get("fallback_models", [])
+
+            # 2. Prioritize "Flash" and "Pro" models, but keep others as backup
+            # This sorting ensures we try the fastest/best models first
+            def model_priority(name):
+                name = name.lower()
+                if 'flash' in name and 'lite' in name: return 0  # Fastest/Cheapest
+                if 'flash' in name: return 1
+                if 'pro' in name: return 2
+                return 3
+            
+            self.available_models.sort(key=model_priority)
+            
+            # 3. Try to initialize with the best available model
+            success = False
+            for i, model_name in enumerate(self.available_models):
+                try:
+                    self.model = genai.GenerativeModel(model_name)
+                    # Verify it works with a tiny test prompt (optional but safer)
+                    # self.model.generate_content("test") 
+                    
+                    self.current_model_name = model_name
+                    self.model_index = i
+                    print(f"Gemini initialized successfully with: {model_name}")
+                    success = True
+                    break
+                except Exception as e:
+                    print(f"Skipping {model_name}: {e}")
+                    continue
+            
+            if success:
+                self._load_context()
+                self._initialized = True
+            else:
+                print("Warning: No Gemini models could be initialized from the available list")
+                self._initialized = False
+                
         except ImportError:
             print("Warning: google-generativeai not installed")
             self._initialized = False
@@ -48,6 +103,26 @@ class InsightEngine:
             print(f"Warning: Could not initialize Gemini: {e}")
             self._initialized = False
     
+    def _switch_to_next_model(self):
+        """Switch to the next available model when quota is exceeded."""
+        if not self.genai:
+            return False
+            
+        self.model_index += 1
+        while self.model_index < len(self.available_models):
+            model_name = self.available_models[self.model_index]
+            try:
+                self.model = self.genai.GenerativeModel(model_name)
+                self.current_model_name = model_name
+                print(f"Switched to fallback model: {model_name}")
+                return True
+            except Exception as e:
+                print(f"Could not switch to {model_name}: {e}")
+                self.model_index += 1
+        
+        print("No more fallback models available")
+        return False
+
     def _load_context(self):
         """Load processed analytics data as context for AI."""
         from engines.ingestion import load_processed_dataset
@@ -85,26 +160,52 @@ class InsightEngine:
         """Check if AI service is available."""
         return self._initialized and self.model is not None
     
-    def ask(self, query: str) -> str:
+    def ask(self, query: str, context: dict = None) -> str:
         """
         Process natural language query about the data.
         Uses loaded context to generate informed responses.
+        Automatically switches models on quota errors.
         """
         if not self.is_available():
             return "AI service is not available. Please set GEMINI_API_KEY in your .env file."
         
-        try:
-            # Build prompt with context
-            prompt = QUERY_PROMPT_TEMPLATE.format(
-                context=self.context,
-                query=query
-            )
-            
-            response = self.model.generate_content(prompt)
-            return response.text
-            
-        except Exception as e:
-            raise AIServiceError(f"Error processing query: {str(e)}")
+        max_retries = len(self.available_models)
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Build prompt with context
+                prompt = QUERY_PROMPT_TEMPLATE.format(
+                    context=self.context,
+                    query=query
+                )
+                
+                response = self.model.generate_content(prompt)
+                return response.text
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                last_error = str(e)
+                print(f"Gemini API Error (model: {self.current_model_name}): {type(e).__name__}: {str(e)}")
+                
+                # Check if it's a quota/rate limit error (429) or model not found (404)
+                if '429' in error_str or 'quota' in error_str or 'rate' in error_str or '404' in error_str:
+                    print(f"Quota/Rate limit/Error hit on {self.current_model_name}, attempting fallback...")
+                    
+                    # Wait briefly to be respectful to rate limits
+                    import time
+                    time.sleep(2)
+                    
+                    if self._switch_to_next_model():
+                        print(f"Retrying with model: {self.current_model_name}")
+                        continue
+                    else:
+                        return f"All AI models have hit their quota limits. Please wait a few minutes and try again. (Last error: {last_error[:100]})"
+                else:
+                    # Non-quota error, don't retry
+                    return f"I encountered an error: {str(e)[:200]}. Please try again."
+        
+        return f"Failed after trying all available models. Last error: {last_error[:150] if last_error else 'Unknown'}"
     
     def explain_trend(self, geo_key: str) -> str:
         """
@@ -190,16 +291,6 @@ class InsightEngine:
             "Identify districts that need immediate attention"
         ]
 
-
-# Module-level singleton
-_engine = None
-
-def get_insight_engine() -> InsightEngine:
-    """Get or create the insight engine singleton."""
-    global _engine
-    if _engine is None:
-        _engine = InsightEngine()
-    return _engine
     def analyze_issue(self, title: str, description: str, data: Dict = {}) -> str:
         """
         Analyze a specific issue and provide actionable solutions.
@@ -227,3 +318,15 @@ def get_insight_engine() -> InsightEngine:
         except Exception as e:
             print(f"Error generating AI analysis: {e}")
             return "Unable to generate analysis at this time."
+
+
+# Module-level singleton
+_engine = None
+
+def get_insight_engine() -> InsightEngine:
+    """Get or create the insight engine singleton."""
+    global _engine
+    if _engine is None:
+        _engine = InsightEngine()
+    return _engine
+

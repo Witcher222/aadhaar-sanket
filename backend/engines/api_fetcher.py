@@ -94,6 +94,23 @@ class UIDAIDataFetcher:
             
             print(f"Saved {record_count} records to {output_file}")
             
+            # --- Cleanup Old Files (Storage Optimization) ---
+            try:
+                # Keep only the 5 most recent files
+                files = list(self.output_dir.glob("uidai_enrolment_*.csv"))
+                if len(files) > 5:
+                    sorted_files = sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)
+                    files_to_delete = sorted_files[5:]
+                    
+                    for f in files_to_delete:
+                        try:
+                            f.unlink()
+                            print(f"Cleanup: Deleted old file {f.name}")
+                        except Exception as e:
+                            print(f"Cleanup Warning: Could not delete {f.name}: {e}")
+            except Exception as e:
+                print(f"Cleanup Error: {e}")
+            
             return {
                 "success": True,
                 "message": f"Successfully fetched {record_count} records from UIDAI API.",

@@ -14,7 +14,7 @@ call .venv\Scripts\activate
 pip install -q -r requirements.txt
 
 echo Starting Backend...
-start "Aadhaar Backend" cmd /k "call .venv\Scripts\activate && cd backend && python -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000"
+start "Aadhaar Backend" cmd /k "call .venv\Scripts\activate && cd backend && python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude 'data/*'"
 
 echo Starting Frontend...
 start "Aadhaar Frontend" cmd /k "npm run dev"

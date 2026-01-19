@@ -285,8 +285,27 @@ const AIChatbot = () => {
         };
     };
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!input.trim()) return;
+
+        // If no active session, create one automatically
+        let currentSessionId = activeSession;
+        if (currentSessionId === null) {
+            const newId = Date.now();
+            currentSessionId = newId;
+
+            const newSession: ChatSession = {
+                id: newId,
+                title: input.length > 30 ? input.substring(0, 30) + '...' : input, // Use query as title
+                lastMessage: input,
+                timestamp: new Date(),
+                messages: [...messages], // Start with current history (e.g. greeting)
+            };
+
+            setSessions(prev => [newSession, ...prev]);
+            setActiveSession(newId);
+            toast({ title: '✨ Saved', description: 'New conversation started automatically' });
+        }
 
         const userMessage: Message = {
             id: Date.now(),
@@ -301,23 +320,58 @@ const AIChatbot = () => {
         setIsTyping(true);
         setShowQuickQueries(false);
 
-        // Simulate AI response
-        setTimeout(() => {
-            const response = generateContextualResponse(query);
+        try {
+            // Call the backend AI API
+            const response = await fetch('http://localhost:8000/api/ai/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query, context: {} }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Format the AI response
+            let responseText = data.answer || data.response || 'No response received.';
+
+            // Check if API returned a warning/fallback
+            if (data.status === 'warning' || data.source === 'fallback') {
+                responseText = `⚠️ ${responseText}\n\n*Note: AI service may need configuration. Check your GEMINI_API_KEY in .env file.*`;
+            }
+
             setMessages((prev) => [
                 ...prev,
                 {
                     id: Date.now(),
                     type: 'assistant',
-                    content: response.text,
-                    chartData: response.chartData,
-                    chartType: response.chartType,
-                    tableData: response.tableData,
+                    content: responseText,
                     timestamp: new Date(),
                 },
             ]);
+        } catch (error) {
+            console.error('AI API call failed:', error);
+            // Fallback to static response if API fails
+            const fallbackResponse = generateContextualResponse(query);
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: Date.now(),
+                    type: 'assistant',
+                    content: `${fallbackResponse.text}\n\n---\n*⚠️ Note: Using offline mode. Backend API unavailable.*`,
+                    chartData: fallbackResponse.chartData,
+                    chartType: fallbackResponse.chartType,
+                    tableData: fallbackResponse.tableData,
+                    timestamp: new Date(),
+                },
+            ]);
+        } finally {
             setIsTyping(false);
-        }, 1500);
+        }
     };
 
     const handleSuggestion = (suggestion: string) => {
@@ -366,19 +420,40 @@ const AIChatbot = () => {
     const handleDeleteSession = (sessionId: number, e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent triggering session load
 
-        if (sessions.length <= 1) {
-            toast({ title: '⚠️ Cannot Delete', description: 'You must keep at least one conversation' });
-            return;
+        const remainingSessions = sessions.filter(s => s.id !== sessionId);
+
+        if (remainingSessions.length === 0) {
+            // If deleting the last session, reset to a fresh state
+            const newSession: ChatSession = {
+                id: Date.now(),
+                title: 'New Conversation',
+                lastMessage: 'Just started...',
+                timestamp: new Date(),
+                messages: [{
+                    id: 1,
+                    type: 'assistant',
+                    content: "Hello! I'm the **Aadhaar Sanket AI Assistant** powered by advanced analytics.\n\nI can help you with:\n• 📊 Migration pattern analysis\n• 🗺️ Regional stress assessments\n• 📈 Population forecasts\n• 📋 Policy impact analysis\n• 📁 Data quality reports\n\nAsk me anything about demographic intelligence!",
+                    timestamp: new Date(),
+                }],
+            };
+            setSessions([newSession]);
+            setMessages(newSession.messages);
+            setActiveSession(newSession.id);
+            setShowQuickQueries(true);
+            toast({ title: '🗑️ Reset', description: 'Chat history reset' });
+        } else {
+            // Normal delete
+            setSessions(remainingSessions);
+
+            // If we deleted the active session, switch to the first available one
+            if (activeSession === sessionId) {
+                const nextSession = remainingSessions[0];
+                setMessages(nextSession.messages);
+                setActiveSession(nextSession.id);
+                setShowQuickQueries(false);
+            }
+            toast({ title: '🗑️ Deleted', description: 'Conversation deleted' });
         }
-
-        setSessions(prev => prev.filter(s => s.id !== sessionId));
-
-        // If we deleted the active session, start a new one
-        if (activeSession === sessionId) {
-            startNewConversation();
-        }
-
-        toast({ title: '🗑️ Deleted', description: 'Chat session removed' });
     };
 
     const renderChart = (data: any[], type: 'line' | 'area' | 'pie' | 'bar') => {
@@ -463,8 +538,8 @@ const AIChatbot = () => {
                             <div
                                 key={session.id}
                                 className={`relative group w-full rounded-xl text-left transition-all ${activeSession === session.id
-                                        ? 'bg-primary/10 ring-1 ring-primary/30'
-                                        : 'hover:bg-secondary/80'
+                                    ? 'bg-primary/10 ring-1 ring-primary/30'
+                                    : 'hover:bg-secondary/80'
                                     }`}
                             >
                                 <button
