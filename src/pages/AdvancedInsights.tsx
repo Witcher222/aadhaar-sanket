@@ -16,6 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import Plot from 'react-plotly.js';
 import { JustificationButton } from '@/components/ui/JustificationButton';
+import TimeSeriesChart from '@/components/charts/TimeSeriesChart';
+import CorrelationMatrix from '@/components/charts/CorrelationMatrix';
+import DistrictComparator from '@/components/features/DistrictComparator';
+import PredictiveChart from '@/components/charts/PredictiveChart';
 import { LayoutGrid } from 'lucide-react';
 
 // Types
@@ -30,7 +34,7 @@ interface PolicySimulation {
 const AdvancedInsights = () => {
     // Policy Simulator State
     const [investment, setInvestment] = useState([50]); // Cr
-    const [district, setDistrict] = useState("DL_New Delhi");
+    const [district, setDistrict] = useState("Delhi_New Delhi");
 
     // Scrollytelling State
     const [activeStoryIndex, setActiveStoryIndex] = useState(0);
@@ -46,7 +50,7 @@ const AdvancedInsights = () => {
     const { data: simulation, refetch: runSimulation, isFetching: isSimulating } = useQuery({
         queryKey: ['simulation', district, investment[0]],
         initialData: {
-            district: "DL_New Delhi",
+            district: "Delhi_New Delhi",
             current_mvi: 0.85,
             projected_mvi: 0.72,
             reduction_percentage: 15.2,
@@ -67,8 +71,8 @@ const AdvancedInsights = () => {
         }
     });
 
-    // 2. Nomads
-    const { data: nomads } = useQuery({
+    // 2. Nomads - Real API with fallback
+    const { data: nomads, isLoading: nomadsLoading } = useQuery({
         queryKey: ['nomads'],
         initialData: [
             { district: "Saran", seasonal_nomads: 12000 },
@@ -77,13 +81,39 @@ const AdvancedInsights = () => {
             { district: "Cuttack", seasonal_nomads: 8500 },
             { district: "Gorakhpur", seasonal_nomads: 7200 },
             { district: "Azamgarh", seasonal_nomads: 6500 },
-            { district: "Gulbarga", seasonal_nomads: 5900 },
         ],
-        queryFn: async () => []
+        queryFn: async () => {
+            try {
+                const response = await fetch('http://localhost:8000/api/advanced/nomads');
+                const result = await response.json();
+                const hotspots = result.data?.hotspots || [];
+                // If API returns data, use it; otherwise keep initialData
+                return hotspots.length > 0 ? hotspots : [
+                    { district: "Saran", seasonal_nomads: 12000 },
+                    { district: "Muzaffarpur", seasonal_nomads: 10500 },
+                    { district: "Ganjam", seasonal_nomads: 9800 },
+                    { district: "Cuttack", seasonal_nomads: 8500 },
+                    { district: "Gorakhpur", seasonal_nomads: 7200 },
+                    { district: "Azamgarh", seasonal_nomads: 6500 },
+                ];
+            } catch (error) {
+                console.error("Nomads API error:", error);
+                // Return fallback data on error
+                return [
+                    { district: "Saran", seasonal_nomads: 12000 },
+                    { district: "Muzaffarpur", seasonal_nomads: 10500 },
+                    { district: "Ganjam", seasonal_nomads: 9800 },
+                    { district: "Cuttack", seasonal_nomads: 8500 },
+                    { district: "Gorakhpur", seasonal_nomads: 7200 },
+                    { district: "Azamgarh", seasonal_nomads: 6500 },
+                ];
+            }
+        },
+        retry: 1
     });
 
-    // 3. Hidden Migration
-    const { data: hiddenMigration } = useQuery({
+    // 3. Hidden Migration - Real API with fallback
+    const { data: hiddenMigration, isLoading: hiddenLoading } = useQuery({
         queryKey: ['hiddenMigration'],
         initialData: [
             { district: "Bangalore", hidden_migration_index: 22, estimated_hidden_population: 350 },
@@ -91,9 +121,115 @@ const AdvancedInsights = () => {
             { district: "Pune", hidden_migration_index: 15, estimated_hidden_population: 210 },
             { district: "Gurgaon", hidden_migration_index: 12, estimated_hidden_population: 150 },
             { district: "Hyderabad", hidden_migration_index: 10, estimated_hidden_population: 180 },
-            { district: "Noida", hidden_migration_index: 9, estimated_hidden_population: 120 },
         ],
-        queryFn: async () => []
+        queryFn: async () => {
+            try {
+                const response = await fetch('http://localhost:8000/api/advanced/hidden-migration');
+                const result = await response.json();
+                const districts = result.data?.districts || [];
+                return districts.length > 0 ? districts : [
+                    { district: "Bangalore", hidden_migration_index: 22, estimated_hidden_population: 350 },
+                    { district: "Surat", hidden_migration_index: 18, estimated_hidden_population: 280 },
+                    { district: "Pune", hidden_migration_index: 15, estimated_hidden_population: 210 },
+                    { district: "Gurgaon", hidden_migration_index: 12, estimated_hidden_population: 150 },
+                    { district: "Hyderabad", hidden_migration_index: 10, estimated_hidden_population: 180 },
+                ];
+            } catch (error) {
+                console.error("Hidden Migration API error:", error);
+                return [
+                    { district: "Bangalore", hidden_migration_index: 22, estimated_hidden_population: 350 },
+                    { district: "Surat", hidden_migration_index: 18, estimated_hidden_population: 280 },
+                    { district: "Pune", hidden_migration_index: 15, estimated_hidden_population: 210 },
+                    { district: "Gurgaon", hidden_migration_index: 12, estimated_hidden_population: 150 },
+                    { district: "Hyderabad", hidden_migration_index: 10, estimated_hidden_population: 180 },
+                ];
+            }
+        },
+        retry: 1
+    });
+
+    // 4. Predictions - Real API
+    const [selectedPeriod, setSelectedPeriod] = useState('ALL');
+    const [selectedDistricts, setSelectedDistricts] = useState<string[]>(['Delhi_New Delhi', 'Maharashtra_Mumbai']);
+
+    const { data: predictionsData, isLoading: predictionsLoading } = useQuery({
+        queryKey: ['predictions', district],
+        queryFn: async () => {
+            try {
+                const response = await fetch(`http://localhost:8000/api/advanced/predictions?geo_key=${encodeURIComponent(district)}&metric=mvi&periods=3`);
+                const result = await response.json();
+                return result.data || { historical: [], predictions: [], trend: 'stable' };
+            } catch (error) {
+                console.error("Predictions API error:", error);
+                return { historical: [], predictions: [], trend: 'stable' };
+            }
+        },
+        retry: 1
+    });
+
+    // 5. Time Series - Real API
+    const { data: timeSeriesData, isLoading: timeSeriesLoading } = useQuery({
+        queryKey: ['timeseries', selectedPeriod, selectedDistricts],
+        queryFn: async () => {
+            try {
+                const keys = selectedDistricts.length > 0 ? selectedDistricts.join(',') : district;
+                const response = await fetch(`http://localhost:8000/api/advanced/timeseries?metric=mvi&period=${selectedPeriod}&geo_keys=${encodeURIComponent(keys)}`);
+                const result = await response.json();
+                return result.data || { data: [], summary: {} };
+            } catch (error) {
+                console.error("Time Series API error:", error);
+                return { data: [], summary: {} };
+            }
+        },
+        retry: 1
+    });
+
+    // 6. Correlation Matrix - Real API
+    const { data: correlationData, isLoading: correlationLoading } = useQuery({
+        queryKey: ['correlation'],
+        queryFn: async () => {
+            try {
+                const response = await fetch('http://localhost:8000/api/advanced/correlation-matrix');
+                const result = await response.json();
+                return result.data || { matrix: [], variables: [] };
+            } catch (error) {
+                console.error("Correlation API error:", error);
+                return { matrix: [], variables: [] };
+            }
+        },
+        retry: 1
+    });
+
+    // 7. Demographics - Real API
+    const { data: demographicsData, isLoading: demographicsLoading } = useQuery({
+        queryKey: ['demographics'],
+        queryFn: async () => {
+            try {
+                const response = await fetch('http://localhost:8000/api/advanced/demographics');
+                const result = await response.json();
+                return result.data || { distributions: {}, total_records: 0 };
+            } catch (error) {
+                console.error("Demographics API error:", error);
+                return { distributions: {}, total_records: 0 };
+            }
+        },
+        retry: 1
+    });
+
+    // 8. Statistical Summary - Real API
+    const { data: statsData, isLoading: statsLoading } = useQuery({
+        queryKey: ['stats'],
+        queryFn: async () => {
+            try {
+                const response = await fetch('http://localhost:8000/api/advanced/statistical-summary');
+                const result = await response.json();
+                return result.data || { summary: {}, top_movers: [], most_stable: [] };
+            } catch (error) {
+                console.error("Stats API error:", error);
+                return { summary: {}, top_movers: [], most_stable: [] };
+            }
+        },
+        retry: 1
     });
 
     // Story Data
@@ -485,6 +621,86 @@ const AdvancedInsights = () => {
                     </Card>
                 </section>
             </div>
+
+            {/* NEW: Advanced Analytics Tabs */}
+            <section className="mt-8">
+                <Tabs defaultValue="predictions" className="w-full">
+                    <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur">
+                        <TabsTrigger value="predictions">Predictions</TabsTrigger>
+                        <TabsTrigger value="timeseries">Time Series</TabsTrigger>
+                        <TabsTrigger value="correlations">Correlations</TabsTrigger>
+                        <TabsTrigger value="demographics">Demographics</TabsTrigger>
+                        <TabsTrigger value="statistics">Statistics</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="predictions" className="space-y-4 mt-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Predictive Forecast - {district}</CardTitle>
+                                <CardDescription>
+                                    {predictionsLoading ? "Loading..." : `${(predictionsData?.historical || []).length} historical • ${(predictionsData?.predictions || []).length} forecast`}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {predictionsLoading ? <div className="py-12 text-center">Loading...</div> :
+                                    predictionsData?.historical?.length > 0 ? <PredictiveChart data={predictionsData} metric="mvi" /> :
+                                        <div className="py-12 text-center text-slate-500">No data for {district}</div>}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="timeseries" className="space-y-4 mt-6">
+                        {timeSeriesLoading ? <Card><CardContent className="py-12 text-center">Loading...</CardContent></Card> :
+                            timeSeriesData?.data?.length > 0 ? <TimeSeriesChart data={timeSeriesData.data} metric="mvi" selectedPeriod={selectedPeriod} onPeriodChange={setSelectedPeriod} /> :
+                                <Card><CardContent className="py-12 text-center text-slate-500">No data</CardContent></Card>}
+                    </TabsContent>
+
+                    <TabsContent value="correlations" className="space-y-4 mt-6">
+                        {correlationLoading ? <Card><CardContent className="py-12 text-center">Loading...</CardContent></Card> :
+                            correlationData?.matrix?.length > 0 ? <CorrelationMatrix data={correlationData} /> :
+                                <Card><CardContent className="py-12 text-center text-slate-500">No data</CardContent></Card>}
+                    </TabsContent>
+
+                    <TabsContent value="demographics" className="space-y-4 mt-6">
+                        <Card>
+                            <CardHeader><CardTitle>Demographics</CardTitle></CardHeader>
+                            <CardContent>
+                                {demographicsLoading ? <div className="py-12 text-center">Loading...</div> :
+                                    <div className="text-lg">Total Records: {demographicsData?.total_records?.toLocaleString() || 0}</div>}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="statistics" className="space-y-4 mt-6">
+                        <Card>
+                            <CardHeader><CardTitle>Statistics</CardTitle></CardHeader>
+                            <CardContent>
+                                {statsLoading ? <div className="py-12 text-center">Loading...</div> :
+                                    statsData?.summary ? (
+                                        <div className="grid grid-cols-4 gap-4">
+                                            <div className="p-4 bg-blue-50 rounded-lg">
+                                                <div className="text-sm text-slate-600">Districts</div>
+                                                <div className="text-2xl font-bold">{statsData.summary.total_districts || 0}</div>
+                                            </div>
+                                            <div className="p-4 bg-green-50 rounded-lg">
+                                                <div className="text-sm text-slate-600">Avg MVI</div>
+                                                <div className="text-2xl font-bold">{statsData.summary.avg_mvi || 0}</div>
+                                            </div>
+                                            <div className="p-4 bg-orange-50 rounded-lg">
+                                                <div className="text-sm text-slate-600">Max MVI</div>
+                                                <div className="text-2xl font-bold">{statsData.summary.max_mvi || 0}</div>
+                                            </div>
+                                            <div className="p-4 bg-purple-50 rounded-lg">
+                                                <div className="text-sm text-slate-600">Population</div>
+                                                <div className="text-2xl font-bold">{(statsData.summary.total_population || 0).toLocaleString()}</div>
+                                            </div>
+                                        </div>
+                                    ) : <div className="py-12 text-center text-slate-500">No data</div>}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </section>
         </div>
     );
 };

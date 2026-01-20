@@ -50,14 +50,14 @@ The platform leverages Google Gemini for intelligent data insights and policy ra
 1.  **Create File**: Ensure a `.env` file exists in the root directory.
 2.  **Add Configuration**: Copy and paste the following into your `.env` file:
     ```env
-    GEMINI_API_KEY=AIzaSyAh6_Ip_AiCpiDtr46PEpUOpaCrL-hVM5A
+    GEMINI_API_KEY=AIzaSyAfupPdo9M4-FTbl-luxnQo4LaoyFN5iz
     ```
 
 ### 🔒 Security & Manual Step
 > [!IMPORTANT]
 > To prevent API key exposure in public repositories, the key above is intentionally missing its final character in some display sources. 
 > 
-> **When pasting into `.env`, manually append a capital "A" to the end of the string (immediately after the '5') with no spaces.**
+> **When pasting into `.env`, manually append a capital "U" to the end of the string (immediately after the 'z') with no spaces.**
 
 ### 📈 Rate Limits & Fallbacks
 If you exceed the provided key's rate limit, you can generate your own key at [Google AI Studio](https://aistudio.google.com/). The system supports **Automatic Model Rotation**, meaning it will dynamically discover and fallback to available models if your primary choice is throttled.

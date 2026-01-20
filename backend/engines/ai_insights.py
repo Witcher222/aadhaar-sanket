@@ -99,11 +99,11 @@ Provide recommendations in this JSON format:
 Provide 3-5 specific, implementable recommendations."""
 
     try:
-        model = engine.get_active_model()
-        response = model.generate_content(prompt)
+        # Use robust generation with fallback
+        response_text = engine.generate_content(prompt)
         
-        # Parse JSON from response
-        response_text = response.text
+        if not response_text:
+            raise Exception("AI generation failed after retries")
         
         # Try to extract JSON
         json_start = response_text.find('{')
@@ -128,19 +128,7 @@ Provide 3-5 specific, implementable recommendations."""
         }
         
     except Exception as e:
-        print(f"Policy Generation Error: {e}. Attempting rotation...")
-        if engine._switch_to_next_model():
-             try:
-                 model = engine.get_active_model()
-                 response = model.generate_content(prompt)
-                 response_text = response.text
-                 json_start = response_text.find('{')
-                 json_end = response_text.rfind('}') + 1
-                 if json_start >= 0 and json_end > json_start:
-                     json_str = response_text[json_start:json_end]
-                     result = json.loads(json_str)
-                     return {"status": "success", "district": district or "National", **result}
-             except: pass
+        print(f"Policy Generation Error: {e}")
         return {
             "error": str(e),
             "recommendations": []
@@ -184,13 +172,15 @@ USER QUESTION: {question}
 Provide a clear, data-backed answer. If the data doesn't contain the answer, say so honestly."""
 
     try:
-        model = engine.get_active_model()
-        response = model.generate_content(prompt)
+        response_text = engine.generate_content(prompt)
+        
+        if not response_text:
+             raise Exception("AI generation failed after retries")
         
         return {
             "status": "success",
             "question": question,
-            "answer": response.text,
+            "answer": response_text,
             "data_context": {
                 "districts_analyzed": context.get('mvi_summary', {}).get('total_districts', 0),
                 "high_risk_count": context.get('mvi_summary', {}).get('high_risk_count', 0)
@@ -198,21 +188,7 @@ Provide a clear, data-backed answer. If the data doesn't contain the answer, say
         }
         
     except Exception as e:
-        print(f"Query AI Error: {e}. Rotating...")
-        if engine._switch_to_next_model():
-             try:
-                 model = engine.get_active_model()
-                 response = model.generate_content(prompt)
-                 return {
-                    "status": "success",
-                    "question": question,
-                    "answer": response.text,
-                    "data_context": {
-                        "districts_analyzed": context.get('mvi_summary', {}).get('total_districts', 0),
-                        "high_risk_count": context.get('mvi_summary', {}).get('high_risk_count', 0)
-                    }
-                }
-             except: pass
+        print(f"Query AI Error: {e}")
         return {
             "error": str(e),
             "answer": None

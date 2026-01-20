@@ -193,59 +193,70 @@ class InsightEngine:
         """Check if AI service is available."""
         return self._initialized and self.model is not None
     
-    def ask(self, query: str, context: dict = None) -> str:
+    def generate_content(self, prompt: str) -> Optional[str]:
         """
-        Process natural language query about the data.
-        Uses loaded context to generate informed responses.
-        Automatically switches models on quota errors.
+        Centralized method to generate content with robust error handling and model rotation.
+        Retries on Quota (429) and Invalid Key (400) errors.
         """
         if not self.is_available():
-            return "AI service is not available. Please set GEMINI_API_KEY in your .env file."
-        
-        max_retries = len(self.available_models)
-        last_error = None
+            return None
+            
+        max_retries = len(self.available_models) + 1
         
         for attempt in range(max_retries):
             try:
-                # Build prompt with context
-                prompt = QUERY_PROMPT_TEMPLATE.format(
-                    context=self.context,
-                    query=query
-                )
-                
+                # Ensure we have a model
+                if not self.model:
+                    if not self._try_next_model():
+                        print("No models availability to generate content")
+                        return None
+
                 response = self.model.generate_content(prompt)
                 return response.text
                 
             except Exception as e:
                 error_str = str(e).lower()
-                last_error = str(e)
-                print(f"Gemini API Error (model: {self.current_model_name}): {type(e).__name__}: {str(e)}")
+                print(f"Gemini Error (model: {self.current_model_name}): {type(e).__name__}: {str(e)}")
                 
-                # Check if it's a quota/rate limit error (429) or model not found (404)
-                if '429' in error_str or 'quota' in error_str or 'rate' in error_str or '404' in error_str:
-                    print(f"Quota/Rate limit/Error hit on {self.current_model_name}, attempting fallback...")
-                    
-                    # Wait briefly to be respectful to rate limits
-                    import time
-                    time.sleep(2)
-                    
+                # Check for recoverable errors (Quota, Rate Limit, Expiry, Invalid Key)
+                is_recoverable = any(x in error_str for x in ['429', '400', 'quota', 'rate', 'limit', 'expired', 'invalid'])
+                
+                if is_recoverable:
+                    print(f"Recoverable error on {self.current_model_name}, attempting fallback...")
                     if self._switch_to_next_model():
-                        print(f"Retrying with model: {self.current_model_name}")
                         continue
                     else:
-                        return f"All AI models have hit their quota limits. Please wait a few minutes and try again. (Last error: {last_error[:100]})"
+                        print("All AI models exhausted.")
+                        raise AIServiceError("All AI models exhausted quota.")
                 else:
-                    # Non-quota error, don't retry
-                    return f"I encountered an error: {str(e)[:200]}. Please try again."
+                    # Non-recoverable error
+                    raise e
         
-        return f"Failed after trying all available models. Last error: {last_error[:150] if last_error else 'Unknown'}"
+        return None
+
+    def ask(self, query: str, context: dict = None) -> str:
+        """
+        Process natural language query about the data.
+        """
+        if not self.is_available():
+            return "AI service is not available. Please set GEMINI_API_KEY in your .env file."
+        
+        try:
+            prompt = QUERY_PROMPT_TEMPLATE.format(
+                context=self.context,
+                query=query
+            )
+            result = self.generate_content(prompt)
+            return result if result else "Unable to generate response."
+        except Exception as e:
+             return f"I encountered an error: {str(e)[:200]}. Please try again."
     
     def explain_trend(self, geo_key: str) -> str:
         """
         Generate AI explanation for a specific region's trends.
         """
         if not self.is_available():
-            return "AI service is not available. Please set GEMINI_API_KEY in your .env file."
+            return "AI service is not available."
         
         try:
             from engines.ingestion import load_processed_dataset
@@ -269,14 +280,13 @@ class InsightEngine:
             if not region_data:
                 return f"No data found for region: {geo_key}"
             
-            # Build prompt
             prompt = EXPLAIN_TREND_TEMPLATE.format(
                 geo_key=geo_key,
                 region_data=region_data
             )
             
-            response = self.model.generate_content(prompt)
-            return response.text
+            result = self.generate_content(prompt)
+            return result if result else "Unable to explain trend."
             
         except Exception as e:
             raise AIServiceError(f"Error explaining trend: {str(e)}")
@@ -286,25 +296,20 @@ class InsightEngine:
         Generate AI-enhanced national-level summary.
         """
         if not self.is_available():
-            # Return rule-based summary if AI not available
             from engines.insight_generator import get_executive_summary
             summary = get_executive_summary()
             return summary.get('summary', 'No data available')
         
         try:
             from engines.insight_generator import get_executive_summary
-            
             exec_summary = get_executive_summary()
             
-            prompt = EXECUTIVE_SUMMARY_TEMPLATE.format(
-                data_summary=exec_summary
-            )
+            prompt = EXECUTIVE_SUMMARY_TEMPLATE.format(data_summary=exec_summary)
             
-            response = self.model.generate_content(prompt)
-            return response.text
+            result = self.generate_content(prompt)
+            return result if result else exec_summary.get('summary', 'AI generation failed.')
             
         except Exception as e:
-            # Fallback to rule-based summary
             from engines.insight_generator import get_executive_summary
             summary = get_executive_summary()
             return summary.get('summary', f'Error generating summary: {str(e)}')
@@ -345,13 +350,11 @@ class InsightEngine:
         Keep it concise and professional.
         """
         try:
-            response = self.model.generate_content(prompt)
-            print(f"AI response generated for {title}") # Debug log
-            return response.text
+            result = self.generate_content(prompt)
+            return result if result else "Unable to generate analysis."
         except Exception as e:
             print(f"Error generating AI analysis: {e}")
             return "Unable to generate analysis at this time."
-
 
 # Module-level singleton
 _engine = None
